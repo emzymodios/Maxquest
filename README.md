@@ -1,4 +1,4 @@
-# Henxi — Discord Quest Auto-Completer Bot
+# mori — Discord Quest Auto-Completer Bot
 
 Tool tự động quét, nhận và hoàn thành Discord Quest, đóng gói thành **Discord bot + Web Dashboard**.
 
