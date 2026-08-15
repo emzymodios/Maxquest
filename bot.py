@@ -197,3 +197,11 @@ async def on_ready():
 if __name__ == "__main__":
     database.init_db()
     bot.run(os.environ.get("DISCORD_BOT_TOKEN"))
+    def run_bot():
+    """Hàm khởi động bot cho main.py"""
+    token = os.environ.get("DISCORD_BOT_TOKEN")
+    if token:
+        bot.run(token)
+    else:
+        log.error("DISCORD_BOT_TOKEN không được tìm thấy cho bot!")
+
