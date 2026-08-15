@@ -206,53 +206,103 @@ class ControlPanelView(discord.ui.View):
     async def status_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         
-        user_tokens = [k for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id]
+        workers = get_all_workers()
+        running_count = len(workers)
+        running_list = get_running_accounts()
         
-        if not user_tokens:
-            await interaction.followup.send("❌ Bạn chưa thêm token nào!", ephemeral=True)
-            return
+        stats = database.get_stats()
+        recent = stats.get("recent_logs", [])[:10]
+        failed = sum(1 for l in recent if l.get("status") == "failed")
         
-        embeds = []
-        for token in user_tokens:
-            stats = get_quest_stats_by_token(token)
-            if not stats:
-                continue
+        embed = discord.Embed(
+            title="📊 QUEST STATISTICS",
+            color=0x5865F2,
+            description="━━━━━━━━━━━━━━━"
+        )
+        
+        # Main stats
+        embed.add_field(
+            name="📈 Tổng Quest",
+            value=f"**{stats.get('total_logs', 0)}**",
+            inline=True
+        )
+        embed.add_field(
+            name="✅ Hoàn Thành",
+            value=f"**{stats.get('completed_logs', 0)}**",
+            inline=True
+        )
+        embed.add_field(
+            name="📋 Đã Nhận",
+            value=f"**{stats.get('enrolled_logs', 0)}**",
+            inline=True
+        )
+        
+        embed.add_field(name="━━━━━━━━━━━━━━━", value="", inline=False)
+        
+        # Active status
+        embed.add_field(
+            name="🟢 Active Workers",
+            value=f"**{running_count}**",
+            inline=True
+        )
+        embed.add_field(
+            name="👥 Tài Khoản Chạy",
+            value=f"**{len(running_list)}**",
+            inline=True
+        )
+        embed.add_field(
+            name="❌ Thất Bại",
+            value=f"**{failed}**",
+            inline=True
+        )
+        
+        embed.add_field(name="━━━━━━━━━━━━━━━", value="", inline=False)
+        
+        # Running accounts
+        if running_list:
+            running_lines = []
+            for acc in running_list:
+                username = acc.get('username', 'Unknown')
+                message = acc.get('message', 'Running')
+                running_lines.append(f"🟢 **{username}** - `{message}`")
             
-            status = "🟢 Online" if stats['is_running'] else "⚫ Offline"
-            
-            embed = discord.Embed(
-                title=f"📊 {stats['username']}",
-                color=0x5865F2 if stats['is_running'] else 0x666666,
-                description=status
+            embed.add_field(
+                name="🔄 Đang Chạy",
+                value="\n".join(running_lines),
+                inline=False
             )
-            
-            if stats['is_running'] and stats['current_quest']:
-                embed.add_field(
-                    name="⚡ ACTIVE QUEST",
-                    value=f"```{stats['current_quest']}```",
-                    inline=False
-                )
-            
-            stats_line = f"◈Hoàn Thành: **{stats['completed']}** | ◈Thất Bại: **{stats['failed']}** | ◈All Quest: **{stats['enrolled']}**"
-            embed.add_field(name="━━━━━━━━━━━━━━", value=stats_line, inline=False)
-            
-            if stats['recent_logs']:
-                recent_lines = []
-                for log in stats['recent_logs'][:10]:
-                    emoji = "✅" if log.get("status") == "success" else "❌"
-                    qname = log.get("quest_name") or f"Quest#{log.get('quest_id', '?')}"
-                    recent_lines.append(f"{emoji} {qname}")
-                
-                quest_text = "\n".join(recent_lines) if recent_lines else "—"
-                embed.add_field(name="◈Quest Hoàn Thành", value=quest_text, inline=False)
-            
-            embed.set_footer(text="━━━━━━━━━━━━━━━")
-            embeds.append(embed)
-        
-        if embeds:
-            await interaction.followup.send(embeds=embeds, ephemeral=True)
         else:
-            await interaction.followup.send("❌ Không tìm thấy dữ liệu!", ephemeral=True)
+            embed.add_field(
+                name="🔄 Đang Chạy",
+                value="Không có tài khoản nào chạy",
+                inline=False
+            )
+        
+        # Recent quests
+        if recent:
+            lines = []
+            for log_entry in recent[:10]:
+                action = log_entry.get("action", "")
+                action_icon = {
+                    "enrolled": "📋",
+                    "completed": "✅",
+                    "failed": "❌",
+                    "pending": "⏳"
+                }.get(action, "❓")
+                
+                status_icon = "✅" if log_entry.get("status") == "success" else "❌"
+                qname = log_entry.get("quest_name") or f"Quest#{log_entry.get('quest_id', '?')}"
+                lines.append(f"{action_icon} {status_icon} **{qname}**")
+            
+            embed.add_field(
+                name="📜 Quest Gần Đây",
+                value="\n".join(lines) or "—",
+                inline=False
+            )
+        
+        embed.set_footer(text="━━━━━━━━━━━━━━━ • Quest Manager")
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
     
     @discord.ui.button(label="Hướng Dẫn", style=discord.ButtonStyle.secondary, emoji="❓")
     async def help_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -299,9 +349,7 @@ class ControlPanelView(discord.ui.View):
 async def autoquest_command(interaction: discord.Interaction):
     """Main control panel command"""
     
-    # Get system status
     running_accounts = get_running_accounts()
-    system_status = "🟢 Online" if running_accounts else "🟢 Online"
     
     embed = discord.Embed(
         title="⚡ QUEST MANAGER",
@@ -309,24 +357,14 @@ async def autoquest_command(interaction: discord.Interaction):
         color=0x5865F2
     )
     
-    embed.add_field(name="🟢 System", value=system_status, inline=False)
-    embed.add_field(name="🔧 Status", value="Ready", inline=False)
+    embed.add_field(name="🟢 Status", value="Online", inline=False)
     
     embed.add_field(
         name="⚙️ Control Panel",
         value="Sử dụng các nút bên dưới để quản lý bot",
         inline=False
     )
-    embed.add_field(
-        name="🔑 TOKEN",
-        value="Not configured",
-        inline=False
-    )
-    embed.add_field(
-        name="📊 Status",
-        value="Ready",
-        inline=False
-    )
+    
     embed.add_field(
         name="⚡ Mode",
         value="Active",
@@ -339,59 +377,102 @@ async def autoquest_command(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 
-@tree.command(name="status", description="Xem status tất cả token của bạn")
+@tree.command(name="status", description="Xem status tất cả quest")
 async def status_command(interaction: discord.Interaction):
-    """Show detailed status for all tokens"""
+    """Show status based on henxi file logic"""
     await interaction.response.defer(ephemeral=True)
     
-    user_tokens = [k for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id]
+    workers = get_all_workers()
+    running_count = len(workers)
+    running_list = get_running_accounts()
     
-    if not user_tokens:
-        await interaction.followup.send("❌ Bạn chưa thêm token nào!", ephemeral=True)
-        return
+    stats = database.get_stats()
+    recent = stats.get("recent_logs", [])[:10]
+    failed = sum(1 for l in recent if l.get("status") == "failed")
     
-    embeds = []
+    embed = discord.Embed(
+        title="📊 QUEST STATISTICS",
+        color=0x5865F2,
+        description="━━━━━━━━━━━━━━━"
+    )
     
-    for token in user_tokens:
-        stats = get_quest_stats_by_token(token)
-        if not stats:
-            continue
+    # Main stats
+    embed.add_field(
+        name="📈 Tổng Quest",
+        value=f"**{stats.get('total_logs', 0)}**",
+        inline=True
+    )
+    embed.add_field(
+        name="✅ Hoàn Thành",
+        value=f"**{stats.get('completed_logs', 0)}**",
+        inline=True
+    )
+    embed.add_field(
+        name="📋 Đã Nhận",
+        value=f"**{stats.get('enrolled_logs', 0)}**",
+        inline=True
+    )
+    
+    embed.add_field(name="━━━━━━━━━━━━━━━", value="", inline=False)
+    
+    # Active status
+    embed.add_field(
+        name="🟢 Active Workers",
+        value=f"**{running_count}**",
+        inline=True
+    )
+    embed.add_field(
+        name="👥 Tài Khoản Chạy",
+        value=f"**{len(running_list)}**",
+        inline=True
+    )
+    embed.add_field(
+        name="❌ Thất Bại",
+        value=f"**{failed}**",
+        inline=True
+    )
+    
+    embed.add_field(name="━━━━━━━━━━━━━━━", value="", inline=False)
+    
+    # Running accounts
+    if running_list:
+        running_lines = []
+        for acc in running_list:
+            username = acc.get('username', 'Unknown')
+            message = acc.get('message', 'Running')
+            running_lines.append(f"🟢 **{username}** - `{message}`")
         
-        status = "🟢 Online" if stats['is_running'] else "⚫ Offline"
-        
-        embed = discord.Embed(
-            title=f"📊 {stats['username']}",
-            color=0x5865F2 if stats['is_running'] else 0x666666,
-            description=status
+        embed.add_field(
+            name="🔄 Đang Chạy",
+            value="\n".join(running_lines),
+            inline=False
         )
-        
-        if stats['is_running'] and stats['current_quest']:
-            embed.add_field(
-                name="⚡ ACTIVE QUEST",
-                value=f"```{stats['current_quest']}```",
-                inline=False
-            )
-        
-        stats_line = f"◈Hoàn Thành: **{stats['completed']}** | ◈Thất Bại: **{stats['failed']}** | ◈All Quest: **{stats['enrolled']}**"
-        embed.add_field(name="━━━━━━━━━━━━━━", value=stats_line, inline=False)
-        
-        if stats['recent_logs']:
-            recent_lines = []
-            for log in stats['recent_logs'][:10]:
-                emoji = "✅" if log.get("status") == "success" else "❌"
-                qname = log.get("quest_name") or f"Quest#{log.get('quest_id', '?')}"
-                recent_lines.append(f"{emoji} {qname}")
-            
-            quest_text = "\n".join(recent_lines) if recent_lines else "—"
-            embed.add_field(name="◈Quest Hoàn Thành", value=quest_text, inline=False)
-        
-        embed.set_footer(text="━━━━━━━━━━━━━━━")
-        embeds.append(embed)
     
-    if embeds:
-        await interaction.followup.send(embeds=embeds)
-    else:
-        await interaction.followup.send("❌ Không tìm thấy dữ liệu!", ephemeral=True)
+    # Recent quests
+    if recent:
+        lines = []
+        for log_entry in recent[:10]:
+            action = log_entry.get("action", "")
+            action_icon = {
+                "enrolled": "📋",
+                "completed": "✅",
+                "failed": "❌",
+                "pending": "⏳"
+            }.get(action, "❓")
+            
+            status_icon = "✅" if log_entry.get("status") == "success" else "❌"
+            qname = log_entry.get("quest_name") or f"Quest#{log_entry.get('quest_id', '?')}"
+            lines.append(f"{action_icon} {status_icon} **{qname}**")
+        
+        embed.add_field(
+            name="📜 Quest Gần Đây",
+            value="\n".join(lines) or "—",
+            inline=False
+        )
+    
+    embed.set_footer(text="━━━━━━━━━━━━━━━ • Quest Manager")
+    
+    await interaction.followup.send(embed=embed)
 
 
 @tree.command(name="setchannel", description="Setup channel thông báo (Admin only)")
