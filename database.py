@@ -259,7 +259,20 @@ def set_setting(key: str, value: str):
             (key, value)
         )
         conn.commit()
+        
+def get_quest_logs_by_user(user_id: str, limit: int = 10) -> list:
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT ql.*, a.username, a.user_id
+            FROM quest_log ql
+            JOIN tokens t ON t.id = ql.token_id
+            JOIN accounts a ON a.id = t.account_id
+            WHERE a.user_id = ?
+            ORDER BY ql.created_at DESC
+            LIMIT ?
+        """, (str(user_id), limit)).fetchall()
 
+        return [dict(r) for r in rows]
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 
