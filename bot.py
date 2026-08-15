@@ -171,7 +171,7 @@ class ControlPanelView(discord.ui.View):
         embed.add_field(name="📊 Trạng Thái", value="Xem thống kê chi tiết từng tài khoản kèm quest gần đây.", inline=False)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-# ── Commands ────────────────────────────────_________________________________
+# ── Commands ─────────────────────────────────────────────────────────────────
 
 @tree.command(name="autoquest", description="⚡ ONI QUEST Control Panel - All-in-One")
 async def autoquest(interaction: discord.Interaction):
@@ -194,11 +194,8 @@ async def on_ready():
     await tree.sync()
     log.info(f"✅ Bot online: {bot.user}")
 
-if __name__ == "__main__":
-    database.init_db()
-    bot.run(os.environ.get("DISCORD_BOT_TOKEN"))
-    def run_bot():
-    """Hàm khởi động bot cho main.py"""
+# ── Hàm chạy bot tương thích với main.py ─────────────────────────────────────
+def run_bot():
     token = os.environ.get("DISCORD_BOT_TOKEN")
     if token:
         bot.run(token)
