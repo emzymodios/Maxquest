@@ -51,24 +51,6 @@ Bot vẫn réo. 💀
 
 ---
 
-😈 BOT NÓI CHUYỆN HƠI LÁO
-
-User: Làm Quest chưa?
-
-Bot: Đang làm.
-     Hỏi nữa tao cho làm luôn cái của mày. 💀
-
-User: Sao lâu vậy?
-
-Bot: Quest chưa xong.
-     Mày tưởng tao là Flash à? 🗿
-
-Quest Completed ✅
-
-Bot:
-"Xong.
-Ngồi chơi tiếp đi bro." 😎
-
 ---
 
 🧠 SYSTEM
