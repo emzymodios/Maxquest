@@ -1,6 +1,6 @@
 """
-Quest Auto-Completer Bot - Control Panel Version
-All-in-one /autoquest command with button controls
+Quest Auto-Completer Bot - Control Panel Version (ONI QUEST Custom)
+All-in-one /autoquest command with button controls & token-specific stats
 """
 
 import os
@@ -25,7 +25,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-log = logging.getLogger("quest_bot")
+log = logging.getLogger("oni_quest_bot")
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
@@ -41,51 +41,14 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
-# Track token → user mapping
+# Track token → user mapping (hỗ trợ 1 user nhập nhiều token)
 token_to_user = {}
-user_message_id = {}  # Track message ID per user
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def get_quest_stats_by_token(token: str) -> dict:
-    """Get stats for a specific token"""
-    accounts = database.get_all_accounts()
-    account = next((a for a in accounts if a.get("token") == token), None)
-    if not account:
-        return None
-    
-    user_id = account.get("user_id")
-    all_logs = database.get_stats().get("recent_logs", [])
-    token_logs = [l for l in all_logs if l.get("user_id") == user_id]
-    
-    total = len(token_logs)
-    completed = sum(1 for l in token_logs if l.get("status") == "success" and l.get("action") == "completed")
-    enrolled = sum(1 for l in token_logs if l.get("action") == "enrolled")
-    failed = sum(1 for l in token_logs if l.get("status") == "failed")
-    
-    running_accounts = get_running_accounts()
-    current_quest = None
-    is_running = False
-    
-    for acc in running_accounts:
-        if acc.get("user_id") == user_id:
-            current_quest = acc.get("current_quest")
-            is_running = True
-            break
-    
-    return {
-        "username": account.get("username") or account.get("global_name") or account.get("user_id")[:12],
-        "user_id": account.get("user_id"),
-        "total": total,
-        "completed": completed,
-        "enrolled": enrolled,
-        "failed": failed,
-        "percentage": int((completed / enrolled * 100)) if enrolled > 0 else 0,
-        "recent_logs": token_logs[:15],
-        "current_quest": current_quest,
-        "is_running": is_running
-    }
+def action_emoji(action: str) -> str:
+    return {"enrolled": "📥", "completed": "🏆", "failed": "❌", "pending": "⏳"}.get(action, "❓")
 
 
 # ── Modal Input ───────────────────────────────────────────────────────────────
@@ -93,7 +56,7 @@ def get_quest_stats_by_token(token: str) -> dict:
 class TokenInputModal(discord.ui.Modal, title="Nhập Token Discord"):
     token_input = discord.ui.TextInput(
         label="TOKEN",
-        placeholder="Dán token của bạn tại đây",
+        placeholder="Dán token của bạn tại đây (Hỗ trợ nhiều token)",
         min_length=50,
         max_length=200,
         style=discord.TextStyle.long
@@ -107,7 +70,7 @@ class TokenInputModal(discord.ui.Modal, title="Nhập Token Discord"):
             return
         
         try:
-            account_id = database.add_account(token)
+            database.add_account(token)
             accounts = database.get_all_accounts()
             account = next((a for a in accounts if a.get("token") == token), None)
             
@@ -118,6 +81,7 @@ class TokenInputModal(discord.ui.Modal, title="Nhập Token Discord"):
             user_id = account["user_id"]
             username = account.get("username") or account.get("global_name") or user_id[:12]
             
+            # Lưu lại mapping token theo discord user id
             token_to_user[token] = {
                 "discord_user_id": interaction.user.id,
                 "user_id": user_id,
@@ -126,7 +90,7 @@ class TokenInputModal(discord.ui.Modal, title="Nhập Token Discord"):
             
             await interaction.response.defer(ephemeral=True)
             await interaction.followup.send(
-                f"✅ Token thêm thành công: **{username}**",
+                f"🛡️ Thêm thành công tài khoản: **{username}**",
                 ephemeral=True
             )
             
@@ -145,11 +109,10 @@ class ControlPanelView(discord.ui.View):
     async def token_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TokenInputModal())
     
-    @discord.ui.button(label="Bắt Đầu", style=discord.ButtonStyle.success, emoji="▶️")
+    @discord.ui.button(label="Bắt Đầu", style=discord.ButtonStyle.success, emoji="⚡")
     async def start_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         
-        # Get user's tokens
         user_tokens = [k for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id]
         
         if not user_tokens:
@@ -173,9 +136,9 @@ class ControlPanelView(discord.ui.View):
             started.append(username)
         
         if started:
-            await interaction.followup.send(f"✅ Bắt đầu: **{', '.join(started)}**", ephemeral=True)
+            await interaction.followup.send(f"⚡ Đã khởi chạy autoquest cho: **{', '.join(started)}**", ephemeral=True)
         else:
-            await interaction.followup.send("⚠️ Tất cả token đã chạy rồi!", ephemeral=True)
+            await interaction.followup.send("⚠️ Tất cả token của bạn đã chạy rồi!", ephemeral=True)
     
     @discord.ui.button(label="Dừng Quest", style=discord.ButtonStyle.danger, emoji="⏹️")
     async def stop_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -198,310 +161,148 @@ class ControlPanelView(discord.ui.View):
                 stopped.append(username)
         
         if stopped:
-            await interaction.followup.send(f"✅ Đã dừng: **{', '.join(stopped)}**", ephemeral=True)
+            await interaction.followup.send(f"⏹️ Đã dừng hệ thống của: **{', '.join(stopped)}**", ephemeral=True)
         else:
-            await interaction.followup.send("⚠️ Không có token nào đang chạy!", ephemeral=True)
+            await interaction.followup.send("⚠️ Không có token nào của bạn đang chạy!", ephemeral=True)
     
     @discord.ui.button(label="Trạng Thái", style=discord.ButtonStyle.secondary, emoji="📊")
     async def status_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         
-        workers = get_all_workers()
-        running_count = len(workers)
-        running_list = get_running_accounts()
+        # Lấy danh sách token cụ thể do Discord user này nhập
+        user_tokens_map = {k: v for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id}
         
+        if not user_tokens_map:
+            await interaction.followup.send("❌ Bạn chưa nhập token nào vào hệ thống để thống kê!", ephemeral=True)
+            return
+
         stats = database.get_stats()
-        recent = stats.get("recent_logs", [])[:10]
-        failed = sum(1 for l in recent if l.get("status") == "failed")
+        all_logs = stats.get("recent_logs", [])
         
-        embed = discord.Embed(
-            title="📊 QUEST STATISTICS",
-            color=0x5865F2,
-            description="━━━━━━━━━━━━━━━"
-        )
+        embed = discord.Embed(title="🛡️ ONI QUEST - THỐNG KÊ CÁ NHÂN", color=0x9B59B6)
         
-        # Main stats
-        embed.add_field(
-            name="📈 Tổng Quest",
-            value=f"**{stats.get('total_logs', 0)}**",
-            inline=True
-        )
-        embed.add_field(
-            name="✅ Hoàn Thành",
-            value=f"**{stats.get('completed_logs', 0)}**",
-            inline=True
-        )
-        embed.add_field(
-            name="📋 Đã Nhận",
-            value=f"**{stats.get('enrolled_logs', 0)}**",
-            inline=True
-        )
-        
-        embed.add_field(name="━━━━━━━━━━━━━━━", value="", inline=False)
-        
-        # Active status
-        embed.add_field(
-            name="🟢 Active Workers",
-            value=f"**{running_count}**",
-            inline=True
-        )
-        embed.add_field(
-            name="👥 Tài Khoản Chạy",
-            value=f"**{len(running_list)}**",
-            inline=True
-        )
-        embed.add_field(
-            name="❌ Thất Bại",
-            value=f"**{failed}**",
-            inline=True
-        )
-        
-        embed.add_field(name="━━━━━━━━━━━━━━━", value="", inline=False)
-        
-        # Running accounts
-        if running_list:
-            running_lines = []
-            for acc in running_list:
-                username = acc.get('username', 'Unknown')
-                message = acc.get('message', 'Running')
-                running_lines.append(f"🟢 **{username}** - `{message}`")
+        # Duyệt riêng từng token/tài khoản mà user này đã nhập
+        for token, info in user_tokens_map.items():
+            u_id = info["user_id"]
+            uname = info["username"]
             
-            embed.add_field(
-                name="🔄 Đang Chạy",
-                value="\n".join(running_lines),
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="🔄 Đang Chạy",
-                value="Không có tài khoản nào chạy",
-                inline=False
-            )
-        
-        # Recent quests
-        if recent:
-            lines = []
-            for log_entry in recent[:10]:
-                action = log_entry.get("action", "")
-                action_icon = {
-                    "enrolled": "📋",
-                    "completed": "✅",
-                    "failed": "❌",
-                    "pending": "⏳"
-                }.get(action, "❓")
-                
-                status_icon = "✅" if log_entry.get("status") == "success" else "❌"
-                qname = log_entry.get("quest_name") or f"Quest#{log_entry.get('quest_id', '?')}"
-                lines.append(f"{action_icon} {status_icon} **{qname}**")
+            # Lọc log riêng cho từng user_id của token đó
+            token_logs = [l for l in all_logs if l.get("user_id") == u_id]
             
-            embed.add_field(
-                name="📜 Quest Gần Đây",
-                value="\n".join(lines) or "—",
-                inline=False
+            total = len(token_logs)
+            enrolled = sum(1 for l in token_logs if l.get("action") == "enrolled")
+            failed = sum(1 for l in token_logs if l.get("status") == "failed")
+            is_active = "🟢 Đang chạy" if get_worker(u_id) else "🔴 Đang dừng"
+            
+            # Xây dựng chuỗi hiển thị quest gần đây cho riêng tài khoản này
+            if token_logs:
+                lines = []
+                for log_entry in token_logs[:5]:  # Hiển thị tối đa 5 quest gần nhất mỗi nick cho gọn
+                    act_icon = action_emoji(log_entry.get("action", ""))
+                    stat_icon = "✅" if log_entry.get("status") == "success" else "❌"
+                    qname = log_entry.get("quest_name") or f"Quest#{log_entry.get('quest_id', '?')}"
+                    lines.append(f"{act_icon} {stat_icon} **{qname}**")
+                recent_str = "\n".join(lines)
+            else:
+                recent_str = "Chưa có hoạt động quest nào."
+            
+            # Đóng gói thông tin thành Field riêng biệt cho mỗi token
+            field_value = (
+                f"🔹 **Trạng Thái**: `{is_active}`\n"
+                f"📊 **Tổng quest**: `{total}`\n"
+                f"📥 **Đã nhận**: `{enrolled}`\n"
+                f"❌ **Thất bại**: `{failed}`\n"
+                f"📜 **Quest gần đây**:\n{recent_str}"
             )
+            embed.add_field(name=f"👤 Tài khoản: {uname}", value=field_value, inline=False)
         
-        embed.set_footer(text="━━━━━━━━━━━━━━━ • Quest Manager")
-        
+        embed.set_footer(text="⚡ ONI QUEST SYSTEM • High Performance Auto-Completer")
         await interaction.followup.send(embed=embed, ephemeral=True)
     
-    @discord.ui.button(label="Hướng Dẫn", style=discord.ButtonStyle.secondary, emoji="❓")
+    @discord.ui.button(label="Hướng Dẫn", style=discord.ButtonStyle.secondary, emoji="🧭")
     async def help_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         
         embed = discord.Embed(
-            title="❓ Hướng Dẫn",
-            description="Cách sử dụng Quest Manager",
-            color=0x5865F2
+            title="🧭 HƯỚNG DẪN SỬ DỤNG ONI QUEST",
+            description="Hệ thống tự động hoàn thành Quest Discord chuyên nghiệp",
+            color=0x9B59B6
         )
-        
-        embed.add_field(
-            name="🔑 Nhập Token",
-            value="Nhấn nút này để thêm token Discord của bạn",
-            inline=False
-        )
-        embed.add_field(
-            name="▶️ Bắt Đầu",
-            value="Bắt đầu tự động hoàn thành quest cho tất cả token",
-            inline=False
-        )
-        embed.add_field(
-            name="⏹️ Dừng Quest",
-            value="Dừng quá trình tự động hoàn thành",
-            inline=False
-        )
-        embed.add_field(
-            name="📊 Trạng Thái",
-            value="Xem chi tiết status của từng token",
-            inline=False
-        )
-        embed.add_field(
-            name="⚠️ Lưu Ý",
-            value="Token là mật khẩu của tài khoản. Không chia sẻ với ai!",
-            inline=False
-        )
+        embed.add_field(name="🔑 Nhập Token", value="Thêm một hoặc nhiều token Discord của bạn vào hệ thống an toàn.", inline=False)
+        embed.add_field(name="⚡ Bắt Đầu", value="Kích hoạt luồng tự động làm quest cho toàn bộ token bạn đã thêm.", inline=False)
+        embed.add_field(name="⏹️ Dừng Quest", value="Tạm dừng toàn bộ các tiến trình đang chạy của bạn.", inline=False)
+        embed.add_field(name="📊 Trạng Thái", value="Hiểm thị bảng thống kê chi tiết tách biệt theo từng tài khoản token.", inline=False)
         
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
-# ── Slash Commands ────────────────────────────────────────────────────────────
+# ── Slash Commands ────────────────────────────────____________________________
 
-@tree.command(name="autoquest", description="⚡ Quest Control Panel - All-in-One")
+@tree.command(name="autoquest", description="⚡ ONI QUEST Control Panel - All-in-One")
 async def autoquest_command(interaction: discord.Interaction):
     """Main control panel command"""
-    
-    running_accounts = get_running_accounts()
-    
     embed = discord.Embed(
-        title="⚡ QUEST MANAGER",
-        description="Discord Quest Control Panel",
-        color=0x5865F2
+        title="⚡ ONI QUEST MANAGER",
+        description="Bảng điều khiển hệ thống Auto Quest độc quyền",
+        color=0x9B59B6
     )
-    
-    embed.add_field(name="🟢 Status", value="Online", inline=False)
-    
-    embed.add_field(
-        name="⚙️ Control Panel",
-        value="Sử dụng các nút bên dưới để quản lý bot",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="⚡ Mode",
-        value="Active",
-        inline=False
-    )
-    
-    embed.set_footer(text="Quest Manager • Discord Bot")
+    embed.add_field(name="🛡️ Trạng thái hệ thống", value="`🟢 Sẵn sàng hoạt động`", inline=False)
+    embed.add_field(name="⚙️ Thao tác nhanh", value="Sử dụng các nút bên dưới để cấu hình và điều khiển bot.", inline=False)
     
     view = ControlPanelView(interaction.user.id)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 
-@tree.command(name="status", description="Xem status tất cả quest")
+@tree.command(name="status", description="Xem status tổng quan hệ thống toàn bộ bot")
 async def status_command(interaction: discord.Interaction):
-    """Show status based on henxi file logic"""
+    """Show global status"""
     await interaction.response.defer(ephemeral=True)
     
     workers = get_all_workers()
     running_count = len(workers)
-    running_list = get_running_accounts()
     
     stats = database.get_stats()
     recent = stats.get("recent_logs", [])[:10]
     failed = sum(1 for l in recent if l.get("status") == "failed")
     
-    embed = discord.Embed(
-        title="📊 QUEST STATISTICS",
-        color=0x5865F2,
-        description="━━━━━━━━━━━━━━━"
-    )
-    
-    # Main stats
-    embed.add_field(
-        name="📈 Tổng Quest",
-        value=f"**{stats.get('total_logs', 0)}**",
-        inline=True
-    )
-    embed.add_field(
-        name="✅ Hoàn Thành",
-        value=f"**{stats.get('completed_logs', 0)}**",
-        inline=True
-    )
-    embed.add_field(
-        name="📋 Đã Nhận",
-        value=f"**{stats.get('enrolled_logs', 0)}**",
-        inline=True
-    )
-    
-    embed.add_field(name="━━━━━━━━━━━━━━━", value="", inline=False)
-    
-    # Active status
-    embed.add_field(
-        name="🟢 Active Workers",
-        value=f"**{running_count}**",
-        inline=True
-    )
-    embed.add_field(
-        name="👥 Tài Khoản Chạy",
-        value=f"**{len(running_list)}**",
-        inline=True
-    )
-    embed.add_field(
-        name="❌ Thất Bại",
-        value=f"**{failed}**",
-        inline=True
-    )
-    
-    embed.add_field(name="━━━━━━━━━━━━━━━", value="", inline=False)
-    
-    # Running accounts
-    if running_list:
-        running_lines = []
-        for acc in running_list:
-            username = acc.get('username', 'Unknown')
-            message = acc.get('message', 'Running')
-            running_lines.append(f"🟢 **{username}** - `{message}`")
-        
-        embed.add_field(
-            name="🔄 Đang Chạy",
-            value="\n".join(running_lines),
-            inline=False
-        )
-    
-    # Recent quests
+    embed = discord.Embed(title="📊 ONI QUEST - GLOBAL STATISTICS", color=0x9B59B6)
+    embed.add_field(name="📈 Tổng quest hệ thống", value=str(stats.get("total_logs", 0)), inline=False)
+    embed.add_field(name="📥 Tổng đã nhận", value=str(stats.get("enrolled_logs", 0)), inline=False)
+    embed.add_field(name="⚡ Active workers", value=str(running_count), inline=False)
+
     if recent:
         lines = []
         for log_entry in recent[:10]:
-            action = log_entry.get("action", "")
-            action_icon = {
-                "enrolled": "📋",
-                "completed": "✅",
-                "failed": "❌",
-                "pending": "⏳"
-            }.get(action, "❓")
-            
+            action_icon = action_emoji(log_entry.get("action", ""))
             status_icon = "✅" if log_entry.get("status") == "success" else "❌"
             qname = log_entry.get("quest_name") or f"Quest#{log_entry.get('quest_id', '?')}"
             lines.append(f"{action_icon} {status_icon} **{qname}**")
-        
-        embed.add_field(
-            name="📜 Quest Gần Đây",
-            value="\n".join(lines) or "—",
-            inline=False
-        )
-    
-    embed.set_footer(text="━━━━━━━━━━━━━━━ • Quest Manager")
-    
-    await interaction.followup.send(embed=embed)
+        embed.add_field(name="📜 Quest gần đây toàn cục", value="\n".join(lines) or "—", inline=False)
+    else:
+        embed.add_field(name="📜 Quest gần đây toàn cục", value="—", inline=False)
+
+    embed.set_footer(text=f"Total Enrolled: {stats.get('enrolled_logs', 0)} | Failed: {failed}")
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 @tree.command(name="setchannel", description="Setup channel thông báo (Admin only)")
 @app_commands.describe(channel="Channel để nhận thông báo")
 async def setchannel_command(interaction: discord.Interaction, channel: discord.TextChannel):
-    """Set notification channel (admin only)"""
-    
     if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ Chỉ admin mới có quyền!", ephemeral=True)
+        await interaction.response.send_message("❌ Chỉ admin mới có quyền thực hiện lệnh này!", ephemeral=True)
         return
     
     os.environ["NOTIFICATION_CHANNEL_ID"] = str(channel.id)
-    
-    embed = discord.Embed(
-        title="✅ Channel Được Setup",
-        description=f"Thông báo sẽ được gửi vào {channel.mention}",
-        color=0x00FF88
-    )
+    embed = discord.Embed(title="🛡️ Thiết Lập Thành Công", description=f"Kênh thông báo quest đã được chuyển tới {channel.mention}", color=0x00FF88)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-# ── Background Task - Send Completion Notifications ───────────────────────────
+# ── Background Task ───────────────────────────────────────────────────────────
 
 @tasks.loop(seconds=30)
 async def send_quest_notifications():
-    """Check for completed quests and notify"""
     if not NOTIFICATION_CHANNEL_ID:
         return
-    
     try:
         channel = bot.get_channel(NOTIFICATION_CHANNEL_ID)
         if not channel:
@@ -509,38 +310,26 @@ async def send_quest_notifications():
         
         stats = database.get_stats()
         recent = stats.get("recent_logs", [])
-        
         last_notified = getattr(send_quest_notifications, "last_notified", set())
         
         for log in recent:
             log_id = f"{log.get('quest_id')}_{log.get('user_id')}"
-            
             if log_id in last_notified:
                 continue
             
             if log.get("action") == "completed" and log.get("status") == "success":
-                user_info = None
-                for token, info in token_to_user.items():
-                    if info.get("user_id") == log.get("user_id"):
-                        user_info = info
-                        break
-                
+                user_info = next((info for token, info in token_to_user.items() if info.get("user_id") == log.get("user_id")), None)
                 username = user_info["username"] if user_info else "Unknown"
                 qname = log.get("quest_name") or f"Quest#{log.get('quest_id')}"
                 
-                embed = discord.Embed(
-                    title="🎉 QUEST HOÀN THÀNH",
-                    description=f"**{username}**",
-                    color=0x00FF88
-                )
-                embed.add_field(name="◈Quest", value=qname, inline=False)
+                embed = discord.Embed(title="🏆 ONI QUEST - HOÀN THÀNH NHIỆM VỤ", description=f"Tài khoản: **{username}**", color=0x00FF88)
+                embed.add_field(name="🎯 Tên Quest", value=qname, inline=False)
                 embed.set_footer(text=f"Thời gian: {log.get('timestamp', '')}")
                 
                 await channel.send(embed=embed)
                 last_notified.add(log_id)
         
         send_quest_notifications.last_notified = last_notified
-    
     except Exception as e:
         log.error(f"Error in notification task: {e}")
 
@@ -549,9 +338,9 @@ async def send_quest_notifications():
 
 @bot.event
 async def on_ready():
-    log.info(f"✅ Bot Say YAMETE KUDASAI: {bot.user} (ID: {bot.user.id})")
+    log.info(f"🛡️ ONI QUEST Bot online: {bot.user} (ID: {bot.user.id})")
     await tree.sync()
-    log.info("🔧 Commands BAKA")
+    log.info("⚙️ Slash Commands synchronized successfully.")
     
     if not send_quest_notifications.is_running():
         send_quest_notifications.start()
@@ -560,7 +349,6 @@ async def on_ready():
 # ── Run Bot ───────────────────────────────────────────────────────────────────
 
 def run_bot():
-    """Start the bot"""
     database.init_db()
     log.info("📦 Database Initialized")
     
@@ -570,7 +358,7 @@ def run_bot():
         print("❌ DISCORD_BOT_TOKEN not set in .env!")
         return
     
-    log.info("🚀 Starting Quest Bot...")
+    log.info("🚀 Starting ONI QUEST Bot...")
     bot.run(token)
 
 
