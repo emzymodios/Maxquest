@@ -549,9 +549,9 @@ async def send_quest_notifications():
 
 @bot.event
 async def on_ready():
-    log.info(f"✅ Bot Online: {bot.user} (ID: {bot.user.id})")
+    log.info(f"✅ Bot Say YAMETE KUDASAI: {bot.user} (ID: {bot.user.id})")
     await tree.sync()
-    log.info("🔧 Commands Synced")
+    log.info("🔧 Commands BAKA")
     
     if not send_quest_notifications.is_running():
         send_quest_notifications.start()
