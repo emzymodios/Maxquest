@@ -125,7 +125,7 @@ class ControlPanelView(discord.ui.View):
             is_running = get_worker(u_id) is not None
             status_text = "🟢 Đang chạy" if is_running else "🔴 Đang dừng"
             
-            token_logs = [l for l in all_logs if str(l.get("user_id")) == str(u_id)]
+            token_logs = database.get_quest_logs_by_user(u_id, 10)
             total = len(token_logs)
             enrolled = sum(1 for l in token_logs if l.get("action") == "enrolled")
             failed = sum(1 for l in token_logs if l.get("status") == "failed")
