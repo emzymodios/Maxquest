@@ -1,94 +1,43 @@
-# ⚡ AUTOQUEST — QUEST BOT
+# ⚡ AUTOQUEST
 
-«🤖 BẬT BOT. NGỒI CHƠI. QUEST ĐỂ TAO LO.»
+## 🤖 QUEST TỰ ĐỘNG — MÀY KHỎI CẦN BẤM
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💀 AUTOQUEST LÀ GÌ?
-
-AutoQuest là Discord Bot hỗ trợ tự động hóa và theo dõi quá trình Quest.
-
-Không cần ngồi canh từng cái Quest.
-
-Bấm chạy → bot làm việc → Discord báo kết quả.
-
-«🗿 “Mày cứ chơi đi, phần còn lại để bot.”»
+> Tự động hóa Quest, theo dõi tiến trình và quản lý hệ thống ngay trong Discord.
+>
+> **Người ta ngồi làm Quest. Mày ngồi nhìn. Khác biệt nằm ở đây.** 🗿
 
 ---
 
-🔥 TÍNH NĂNG
+## 🔥 FEATURES
 
-⚡ AUTO QUEST
+### ⚡ AUTO QUEST
+Tự động xử lý Quest thay vì bắt mày ngồi click từng cái như thời đồ đá.
 
-Tự động xử lý Quest theo hệ thống của bot.
+### 📊 REAL-TIME STATUS
+Theo dõi trạng thái và tiến trình Quest trực tiếp trên Discord.
 
-📊 QUEST STATUS
-
-Theo dõi trạng thái:
-
-⚡ SYSTEM    ONLINE
-🔥 QUEST     RUNNING
-📊 PROGRESS  0/0
-🤖 STATUS    WORKING...
-
-👥 MULTI ACCOUNT
-
+### 👥 MULTI ACCOUNT
 Quản lý nhiều tài khoản trong cùng một hệ thống.
 
-🔔 NOTIFICATION
+### 🔔 NOTIFICATIONS
+Quest hoàn thành là báo ngay.
+**Không cần 5 phút lại vào Discord hỏi “xong chưa?” như NPC.**
 
-Quest xong?
-
-Bot réo.
-
-Không xong?
-
-Bot vẫn réo. 💀
-
-🎛️ DISCORD CONTROL
-
-Điều khiển trực tiếp bằng giao diện Discord.
+### 🎛️ DISCORD CONTROL
+Điều khiển trực tiếp bằng Discord.
+**Không cần mở cả đống cửa sổ rồi tự làm khổ mình.**
 
 ---
 
----
+## 🧠 SYSTEM
 
-🧠 SYSTEM
-
+```text
 ╭──────────────────────────────╮
 │        ⚡ AUTOQUEST           │
 ├──────────────────────────────┤
-│ 🤖 Automation    : ENABLED   │
-│ 📊 Tracking      : ENABLED   │
-│ 🔔 Notification  : ENABLED   │
-│ 👥 Multi Account : ENABLED   │
-│ 🚀 Status        : ONLINE     │
+│ 🤖 SYSTEM       ONLINE       │
+│ ⚡ QUEST        RUNNING       │
+│ 📊 PROGRESS     TRACKING     │
+│ 👥 ACCOUNTS     ACTIVE       │
+│ 🔔 NOTIFY       ENABLED      │
 ╰──────────────────────────────╯
-
-🚀 INSTALLATION
-
-git clone <repository-url>
-cd AutoQuest
-pip install -r requirements.txt
-
-⚙️ CONFIGURATION
-
-Tạo file ".env" và cấu hình các biến cần thiết trước khi chạy bot.
-
-▶️ RUN
-
-python bot.py
-
-🗿 PHILOSOPHY
-
-«“Quest sinh ra để hoàn thành.”
-“Click sinh ra để được tự động hóa.”
-“Còn mày sinh ra để ngồi nhìn bot chạy.” 💀**»
-
----
-
-⭐ AUTOQUEST
-
-LESS CLICKING. MORE QUESTING. ⚡
-
-«🚀 Open Source • Discord Bot • Quest Automation»
