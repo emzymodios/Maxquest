@@ -191,6 +191,14 @@ class QuestActionView(discord.ui.View):
         embed.add_field(name="Thất Bại", value=str(stats['failed']), inline=True)
         embed.add_field(name="% Hoàn Thành", value=f"{stats['percentage']}%", inline=True)
         
+        # Show current active quest if running
+        if worker and hasattr(worker, 'current_quest'):
+            embed.add_field(
+                name="🎯 Quest Đang Làm",
+                value=worker.current_quest or "Tìm quest...",
+                inline=False
+            )
+        
         if stats['recent_logs']:
             lines = []
             for log in stats['recent_logs'][:8]:
@@ -226,7 +234,7 @@ async def autoquest_command(interaction: discord.Interaction):
 
 @tree.command(name="status", description="Xem status tất cả token của bạn")
 async def status_all_command(interaction: discord.Interaction):
-    """Show status for all tokens of this user"""
+    """Show status for all tokens of this user in one message"""
     await interaction.response.defer(ephemeral=True)
     
     # Find all tokens registered by this user
@@ -236,7 +244,7 @@ async def status_all_command(interaction: discord.Interaction):
         await interaction.followup.send("❌ Bạn chưa thêm token nào!", ephemeral=True)
         return
     
-    messages = []
+    embeds = []
     
     for token in user_tokens:
         stats = get_quest_stats_by_token(token)
@@ -254,6 +262,15 @@ async def status_all_command(interaction: discord.Interaction):
         embed.add_field(name="Hoàn Thành", value=f"{stats['completed']}/{stats['enrolled']}", inline=True)
         embed.add_field(name="% Hoàn", value=f"{stats['percentage']}%", inline=True)
         embed.add_field(name="Thất Bại", value=str(stats['failed']), inline=True)
+        embed.add_field(name="Tổng Quest", value=str(stats['total']), inline=True)
+        
+        # Show active quest if running
+        if worker and hasattr(worker, 'current_quest'):
+            embed.add_field(
+                name="🎯 Quest Đang Làm",
+                value=worker.current_quest or "Tìm quest...",
+                inline=False
+            )
         
         if stats['recent_logs']:
             lines = []
@@ -263,18 +280,14 @@ async def status_all_command(interaction: discord.Interaction):
                 lines.append(f"{emoji} {qname}")
             embed.add_field(name="Quest Gần Đây", value="\n".join(lines), inline=False)
         
-        messages.append(embed)
+        embeds.append(embed)
     
-    if not messages:
+    if not embeds:
         await interaction.followup.send("❌ Không tìm thấy dữ liệu!", ephemeral=True)
         return
     
-    # Send first embed
-    await interaction.followup.send(embed=messages[0])
-    
-    # Send remaining embeds as follow-ups
-    for embed in messages[1:]:
-        await interaction.followup.send(embed=embed)
+    # Send all embeds in one message (Discord allows up to 10 embeds per message)
+    await interaction.followup.send(embeds=embeds)
 
 
 @tree.command(name="setchannel", description="Setup channel để nhận thông báo quest complete")
