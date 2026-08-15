@@ -179,33 +179,36 @@ class QuestActionView(discord.ui.View):
             return
         
         worker = get_worker(self.user_id)
-        status = "🟢 Chạy" if worker else "⚫ Offline"
+        status = "🟢 ONLINE" if worker else "⚫ OFFLINE"
         
         embed = discord.Embed(
-            title=f"📊 Status - {stats['username']}",
-            color=0x5865F2
+            title=f"📊 {stats['username']}",
+            color=0x5865F2 if worker else 0x666666,
+            description=status
         )
-        embed.add_field(name="Status", value=status, inline=True)
-        embed.add_field(name="Tổng Quest", value=str(stats['total']), inline=True)
-        embed.add_field(name="Hoàn Thành", value=f"{stats['completed']}/{stats['enrolled']}", inline=True)
-        embed.add_field(name="Thất Bại", value=str(stats['failed']), inline=True)
-        embed.add_field(name="% Hoàn Thành", value=f"{stats['percentage']}%", inline=True)
         
-        # Show current active quest if running
-        if worker and hasattr(worker, 'current_quest'):
+        # Active quest
+        if worker and hasattr(worker, 'current_quest') and worker.current_quest:
             embed.add_field(
-                name="🎯 Quest Đang Làm",
-                value=worker.current_quest or "Tìm quest...",
+                name="⚡ ACTIVE QUEST",
+                value=worker.current_quest,
                 inline=False
             )
         
+        # Quest stats (horizontal layout)
+        embed.add_field(name="◈Hoàn Thành", value=str(stats['completed']), inline=True)
+        embed.add_field(name="◈Thất Bại", value=str(stats['failed']), inline=True)
+        embed.add_field(name="◈All Quest", value=str(stats['enrolled']), inline=True)
+        
+        # Recent quests
         if stats['recent_logs']:
-            lines = []
-            for log in stats['recent_logs'][:8]:
-                emoji = "✅" if log.get("status") == "success" else "❌"
+            recent_lines = []
+            for log in stats['recent_logs'][:10]:
                 qname = log.get("quest_name") or f"Quest#{log.get('quest_id', '?')}"
-                lines.append(f"{emoji} {qname}")
-            embed.add_field(name="Quest Gần Đây", value="\n".join(lines), inline=False)
+                recent_lines.append(f"◈{qname}")
+            
+            quest_text = "\n".join(recent_lines) if recent_lines else "—"
+            embed.add_field(name="◈Quest Gần Đây", value=quest_text, inline=False)
         
         await interaction.followup.send(embed=embed, ephemeral=True)
     
@@ -252,33 +255,36 @@ async def status_all_command(interaction: discord.Interaction):
             continue
         
         worker = get_worker(stats['user_id'])
-        status = "🟢 Chạy" if worker else "⚫ Offline"
+        status = "🟢 ONLINE" if worker else "⚫ OFFLINE"
         
         embed = discord.Embed(
             title=f"📊 {stats['username']}",
-            color=0x5865F2 if worker else 0x666666
+            color=0x5865F2 if worker else 0x666666,
+            description=status
         )
-        embed.add_field(name="Status", value=status, inline=True)
-        embed.add_field(name="Hoàn Thành", value=f"{stats['completed']}/{stats['enrolled']}", inline=True)
-        embed.add_field(name="% Hoàn", value=f"{stats['percentage']}%", inline=True)
-        embed.add_field(name="Thất Bại", value=str(stats['failed']), inline=True)
-        embed.add_field(name="Tổng Quest", value=str(stats['total']), inline=True)
         
-        # Show active quest if running
-        if worker and hasattr(worker, 'current_quest'):
+        # Active quest
+        if worker and hasattr(worker, 'current_quest') and worker.current_quest:
             embed.add_field(
-                name="🎯 Quest Đang Làm",
-                value=worker.current_quest or "Tìm quest...",
+                name="⚡ ACTIVE QUEST",
+                value=worker.current_quest,
                 inline=False
             )
         
+        # Quest stats (horizontal layout)
+        embed.add_field(name="◈Hoàn Thành", value=str(stats['completed']), inline=True)
+        embed.add_field(name="◈Thất Bại", value=str(stats['failed']), inline=True)
+        embed.add_field(name="◈All Quest", value=str(stats['enrolled']), inline=True)
+        
+        # Recent quests
         if stats['recent_logs']:
-            lines = []
-            for log in stats['recent_logs'][:5]:
-                emoji = "✅" if log.get("status") == "success" else "❌"
+            recent_lines = []
+            for log in stats['recent_logs'][:10]:
                 qname = log.get("quest_name") or f"Quest#{log.get('quest_id', '?')}"
-                lines.append(f"{emoji} {qname}")
-            embed.add_field(name="Quest Gần Đây", value="\n".join(lines), inline=False)
+                recent_lines.append(f"◈{qname}")
+            
+            quest_text = "\n".join(recent_lines) if recent_lines else "—"
+            embed.add_field(name="◈Quest Gần Đây", value=quest_text, inline=False)
         
         embeds.append(embed)
     
@@ -286,7 +292,7 @@ async def status_all_command(interaction: discord.Interaction):
         await interaction.followup.send("❌ Không tìm thấy dữ liệu!", ephemeral=True)
         return
     
-    # Send all embeds in one message (Discord allows up to 10 embeds per message)
+    # Send all embeds in one message
     await interaction.followup.send(embeds=embeds)
 
 
@@ -375,11 +381,12 @@ async def send_quest_notifications():
                 qname = log.get("quest_name") or f"Quest#{log.get('quest_id')}"
                 
                 embed = discord.Embed(
-                    title="🎉 Quest Hoàn Thành!",
-                    description=f"**{username}** vừa hoàn thành quest",
+                    title="🎉 QUEST HOÀN THÀNH",
+                    description=f"**{username}**",
                     color=0x00FF88
                 )
-                embed.add_field(name="Quest", value=qname, inline=False)
+                embed.add_field(name="◈Quest", value=qname, inline=False)
+                embed.set_footer(text=f"Thời gian: {log.get('timestamp', '')}")
                 
                 await channel.send(embed=embed)
                 last_notified.add(log_id)
