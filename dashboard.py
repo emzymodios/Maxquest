@@ -1,5 +1,4 @@
 """
-Henxi - Discord Quest Auto-Completer Bot
 Web Dashboard sử dụng FastAPI + Jinja2.
 """
 
