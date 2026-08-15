@@ -1,5 +1,4 @@
 """
-Henxi - Quest Auto-Completer Worker Thread
 Chỉ chứa logic auto quest, không có dashboard.
 """
 
