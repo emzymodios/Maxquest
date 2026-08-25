@@ -1,10 +1,10 @@
 """
-ONI QUEST - Discord Auto-Completer (Full Control Panel Version)
-Tích hợp Dashboard đầy đủ nút bấm, Hướng dẫn và Thống kê cá nhân chuẩn xác.
+ONI QUEST - Discord Auto-Completer
+Pure Discord Bot (No Web Panel)
+Full Features Version
 """
 
 import os
-import sys
 import logging
 import discord
 from discord import app_commands
@@ -46,11 +46,26 @@ class TokenInputModal(discord.ui.Modal, title="Nhập Token Discord"):
             accounts = database.get_all_accounts()
             account = next((a for a in accounts if a.get("token") == token), None)
             
+            if not account:
+                await interaction.response.send_message(f"❌ Không thể thêm account!", ephemeral=True)
+                return
+            
             user_id = account["user_id"]
             username = account.get("username") or account.get("global_name") or user_id[:12]
             token_to_user[token] = {"discord_user_id": interaction.user.id, "user_id": user_id, "username": username}
             
-            await interaction.response.send_message(f"🛡️ Thêm thành công tài khoản: **{username}**", ephemeral=True)
+            # Tự động bắt đầu làm quest
+            if not get_worker(user_id):
+                start_worker(token, user_id, username, 60, True)
+                await interaction.response.send_message(
+                    f"🛡️ Thêm và khởi chạy thành công!\n\n👤 Tài khoản: **{username}**\n⚡ Trạng thái: `🟢 Đang chạy`",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    f"⚠️ Tài khoản **{username}** đã chạy rồi!",
+                    ephemeral=True
+                )
         except Exception as e:
             await interaction.response.send_message(f"❌ Lỗi: {e}", ephemeral=True)
 
@@ -58,65 +73,23 @@ class ControlPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Nhập Token", style=discord.ButtonStyle.primary, emoji="🔑")
-    async def token_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Auto Quest", style=discord.ButtonStyle.primary, emoji="🔑")
+    async def auto_quest_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TokenInputModal())
 
-    @discord.ui.button(label="Bắt Đầu", style=discord.ButtonStyle.success, emoji="⚡")
-    async def start_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        user_tokens = [k for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id]
-        
-        if not user_tokens:
-            await interaction.followup.send("❌ Bạn chưa thêm token nào!", ephemeral=True)
-            return
-
-        started = []
-        for token in user_tokens:
-            info = token_to_user[token]
-            if not get_worker(info["user_id"]):
-                start_worker(token, info["user_id"], info["username"], 60, True)
-                started.append(info["username"])
-                
-        if started:
-            await interaction.followup.send(f"⚡ Đã khởi chạy autoquest cho: **{', '.join(started)}**", ephemeral=True)
-        else:
-            await interaction.followup.send("⚠️ Tất cả token của bạn đã chạy rồi!", ephemeral=True)
-
-    @discord.ui.button(label="Dừng Quest", style=discord.ButtonStyle.danger, emoji="⏹️")
-    async def stop_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        user_tokens = [v for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id]
-        
-        if not user_tokens:
-            await interaction.followup.send("❌ Không có token nào!", ephemeral=True)
-            return
-
-        stopped = []
-        for info in user_tokens:
-            if get_worker(info["user_id"]):
-                stop_worker(info["user_id"])
-                stopped.append(info["username"])
-                
-        if stopped:
-            await interaction.followup.send(f"⏹️ Đã dừng hệ thống của: **{', '.join(stopped)}**", ephemeral=True)
-        else:
-            await interaction.followup.send("⚠️ Không có token nào của bạn đang chạy!", ephemeral=True)
-
-    @discord.ui.button(label="Trạng Thái", style=discord.ButtonStyle.secondary, emoji="📊")
-    async def status_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Thống kê Quest", style=discord.ButtonStyle.secondary, emoji="💎")
+    async def stats_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         user_tokens_map = {k: v for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id}
         
         if not user_tokens_map:
-            await interaction.followup.send("❌ Bạn chưa nhập token nào vào hệ thống để thống kê!", ephemeral=True)
+            await interaction.followup.send("❌ Bạn chưa nhập token nào!", ephemeral=True)
             return
 
         stats = database.get_stats()
-        all_logs = stats.get("recent_logs", [])
         running_accounts = get_running_accounts()
         
-        embed = discord.Embed(title="🛡️ ONI QUEST - THỐNG KÊ CÁ NHÂN", color=0x9B59B6)
+        embed = discord.Embed(title="💎 THỐNG KÊ QUEST", color=0x9B59B6)
         
         for token, info in user_tokens_map.items():
             u_id = info["user_id"]
@@ -129,6 +102,7 @@ class ControlPanelView(discord.ui.View):
             total = len(token_logs)
             enrolled = sum(1 for l in token_logs if l.get("action") == "enrolled")
             failed = sum(1 for l in token_logs if l.get("status") == "failed")
+            completed = sum(1 for l in token_logs if l.get("status") == "success")
             
             lines = []
             active_acc = next((acc for acc in running_accounts if str(acc.get("user_id")) == str(u_id)), None)
@@ -148,57 +122,74 @@ class ControlPanelView(discord.ui.View):
             field_value = (
                 f"🔹 **Trạng Thái**: `{status_text}`\n"
                 f"📊 **Tổng quest**: `{total}`\n"
+                f"✅ **Hoàn thành**: `{completed}`\n"
                 f"📥 **Đã nhận**: `{enrolled}`\n"
                 f"❌ **Thất bại**: `{failed}`\n"
                 f"📜 **Quest gần đây**:\n{recent_str}"
             )
-            embed.add_field(name=f"👤 Tài khoản: {uname}", value=field_value, inline=False)
+            embed.add_field(name=f"👤 {uname}", value=field_value, inline=False)
         
-        embed.set_footer(text="⚡ ONI QUEST SYSTEM • High Performance Auto-Completer")
+        embed.set_footer(text="⚡ Oni • Quest Auto-Completer")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="Hướng Dẫn", style=discord.ButtonStyle.secondary, emoji="🧭")
-    async def help_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Stop Quest", style=discord.ButtonStyle.danger, emoji="⏹")
+    async def stop_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(
-            title="🧭 HƯỚNG DẪN SỬ DỤNG ONI QUEST",
-            description="Hệ thống tự động hoàn thành Quest Discord chuyên nghiệp",
-            color=0x9B59B6
-        )
-        embed.add_field(name="🔑 Nhập Token", value="Thêm một hoặc nhiều token Discord của bạn vào hệ thống.", inline=False)
-        embed.add_field(name="⚡ Bắt Đầu", value="Kích hoạt tiến trình tự động làm quest.", inline=False)
-        embed.add_field(name="⏹️ Dừng Quest", value="Tạm dừng tiến trình đang chạy.", inline=False)
-        embed.add_field(name="📊 Trạng Thái", value="Xem thống kê chi tiết từng tài khoản kèm quest gần đây.", inline=False)
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        user_tokens = [v for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id]
+        
+        if not user_tokens:
+            await interaction.followup.send("❌ Không có token nào!", ephemeral=True)
+            return
 
-# ── Commands ─────────────────────────────────────────────────────────────────
+        stopped = []
+        for info in user_tokens:
+            if get_worker(info["user_id"]):
+                stop_worker(info["user_id"])
+                stopped.append(info["username"])
+                
+        if stopped:
+            await interaction.followup.send(f"⏹ Đã dừng: **{', '.join(stopped)}**", ephemeral=True)
+        else:
+            await interaction.followup.send("⚠️ Không có quest nào đang chạy!", ephemeral=True)
 
-@tree.command(name="autoquest", description="⚡ ONI QUEST Control Panel - All-in-One")
+# ── Discord Commands ─────────────────────────────────────────────────────────
+
+@tree.command(name="autoquest", description="🔑 Quest Auto-Completer Control Panel")
 async def autoquest(interaction: discord.Interaction):
+    """Hiển thị embed + GIF + buttons"""
     embed = discord.Embed(
-        title="⚡ ONI QUEST MANAGER",
-        description="Bảng điều khiển hệ thống Auto Quest độc quyền",
+        title="🔑 QUEST AUTO-COMPLETER",
+        description="Chào mừng đến với Quest Auto-Completer!\nNhấn nút bên dưới để quản lý quest của bạn.",
         color=0x9B59B6
     )
-    embed.add_field(name="🛡️ Trạng thái hệ thống", value="`🟢 Sẵn sàng hoạt động`", inline=False)
-    embed.add_field(name="⚙️ Thao tác nhanh", value="Sử dụng các nút bên dưới để cấu hình và điều khiển bot.", inline=False)
+    
+    # Thêm ảnh GIF
+    embed.set_image(url="https://media.giphy.com/media/WJmwuUXuLvaSJo9owu/giphy.gif")
+    
+    # Thêm features
+    embed.add_field(name="🔑 Auto Quest", value="Nhập token Discord - Tự động khởi chạy làm quest", inline=False)
+    embed.add_field(name="💎 Thống kê Quest", value="Xem chi tiết quest làm được, quest gần đây, trạng thái từng tài khoản", inline=False)
+    embed.add_field(name="⏹ Stop Quest", value="Dừng phiên làm quest hiện tại", inline=False)
+    embed.add_field(name="📝 Mô tả", value="Token chỉ dùng để hoàn thành quest, không lưu trữ.", inline=False)
+    embed.set_footer(text="By: Oni • Quest Auto-Completer")
     
     await interaction.response.send_message(embed=embed, view=ControlPanelView(), ephemeral=False)
-
-@tree.command(name="status", description="Xem thống kê quest cá nhân theo token đã nhập")
-async def status_command(interaction: discord.Interaction):
-    await ControlPanelView().status_btn(interaction, None)
 
 @bot.event
 async def on_ready():
     await tree.sync()
     log.info(f"✅ Bot online: {bot.user}")
 
-# ── Hàm chạy bot tương thích với main.py ─────────────────────────────────────
+# ── Run Bot ──────────────────────────────────────────────────────────────────
+
 def run_bot():
+    """Run Discord Bot"""
     token = os.environ.get("DISCORD_BOT_TOKEN")
     if token:
         bot.run(token)
     else:
-        log.error("DISCORD_BOT_TOKEN không được tìm thấy cho bot!")
+        log.error("❌ DISCORD_BOT_TOKEN không được tìm thấy!")
+
+if __name__ == "__main__":
+    run_bot()
 
