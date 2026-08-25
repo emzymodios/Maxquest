@@ -158,20 +158,19 @@ async def autoquest(interaction: discord.Interaction):
     """Hiển thị embed + GIF + buttons"""
     embed = discord.Embed(
         title="⛩️𝐎𝐍𝐈 • 𝐀𝐔𝐓𝐎 𝐐𝐔𝐄𝐒𝐓",
-        description="```🌙 Welcome to Oni Auto Quest ✨\n\nQuản lý tất cả quest của bạn một cách tự động```",
+        description="*🌙 Welcome to Oni Auto Quest ✨*",
         color=0x9B59B6
     )
+    
+    # Thêm ảnh GIF sau welcome
+    embed.set_image(url="https://media.giphy.com/media/WJmwuUXuLvaSJo9owu/giphy.gif")
     
     # Thêm features
     embed.add_field(name="⚔️ Auto Quest", value="Nhập token Discord - Tự động khởi chạy làm quest", inline=False)
     embed.add_field(name="🔮 Status", value="Xem chi tiết quest làm được, quest đang làm, trạng thái từng tài khoản", inline=False)
     embed.add_field(name="❌ Stop Quest", value="Dừng phiên làm quest hiện tại", inline=False)
-    embed.add_field(name="📝 Mô tả", value="Token chỉ dùng để hoàn thành quest, không lưu trữ.", inline=False)
     
-    # Thêm ảnh GIF vào cuối
-    embed.set_image(url="https://media.giphy.com/media/WJmwuUXuLvaSJo9owu/giphy.gif")
-    
-    embed.set_footer(text="⚡ ONI QUEST SYSTEM • High Performance Auto-Completer")
+    embed.set_footer(text="ᵐᵃᵈᵉ ᵇʸ ᴼɴɪ")
     
     await interaction.response.send_message(embed=embed, view=ControlPanelView(), ephemeral=False)
 
