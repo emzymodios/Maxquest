@@ -1,6 +1,7 @@
 """
 ONI QUEST - Discord Auto-Completer
 Pure Discord Bot (No Web Panel)
+Full Features Version
 """
 
 import os
@@ -23,6 +24,10 @@ tree = bot.tree
 
 # Lưu tạm mapping: token -> thông tin người dùng Discord
 token_to_user = {}
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+def action_emoji(action: str) -> str:
+    return {"enrolled": "📋", "completed": "✅", "failed": "❌", "pending": "⏳"}.get(action, "❓")
 
 # ── Modal & Views ────────────────────────────────────────────────────────────
 
@@ -49,6 +54,7 @@ class TokenInputModal(discord.ui.Modal, title="Nhập Token Discord"):
             username = account.get("username") or account.get("global_name") or user_id[:12]
             token_to_user[token] = {"discord_user_id": interaction.user.id, "user_id": user_id, "username": username}
             
+            # Tự động bắt đầu làm quest
             if not get_worker(user_id):
                 start_worker(token, user_id, username, 60, True)
                 await interaction.response.send_message(
@@ -67,11 +73,11 @@ class ControlPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Auto Quest", style=discord.ButtonStyle.primary, emoji="🔑")
+    @discord.ui.button(label="Auto Quest", style=discord.ButtonStyle.primary, emoji="⚔️")
     async def auto_quest_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TokenInputModal())
 
-    @discord.ui.button(label="Thống kê Quest", style=discord.ButtonStyle.secondary, emoji="💎")
+    @discord.ui.button(label="Status", style=discord.ButtonStyle.secondary, emoji="🔮")
     async def stats_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         user_tokens_map = {k: v for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id}
@@ -80,7 +86,10 @@ class ControlPanelView(discord.ui.View):
             await interaction.followup.send("❌ Bạn chưa nhập token nào!", ephemeral=True)
             return
 
-        embed = discord.Embed(title="💎 THỐNG KÊ QUEST", color=0x9B59B6)
+        stats = database.get_stats()
+        running_accounts = get_running_accounts()
+        
+        embed = discord.Embed(title="🔮 ONI QUEST - STATUS", color=0x9B59B6)
         
         for token, info in user_tokens_map.items():
             u_id = info["user_id"]
@@ -95,19 +104,34 @@ class ControlPanelView(discord.ui.View):
             failed = sum(1 for l in token_logs if l.get("status") == "failed")
             completed = sum(1 for l in token_logs if l.get("status") == "success")
             
+            lines = []
+            active_acc = next((acc for acc in running_accounts if str(acc.get("user_id")) == str(u_id)), None)
+            current_msg = active_acc.get("message") if active_acc else None
+            if current_msg and is_running:
+                lines.append(f"⚔️🥇 **Đang làm**: `{current_msg}`")
+                
+            if token_logs:
+                for log_entry in token_logs[:5]:
+                    action_icon = action_emoji(log_entry.get("action", ""))
+                    status_icon = "✅" if log_entry.get("status") == "success" else "❌"
+                    qname = log_entry.get("quest_name") or f"Quest#{log_entry.get('quest_id', '?')}"
+                    lines.append(f"{action_icon} {status_icon} **{qname}**")
+            
+            recent_str = "\n".join(lines) if lines else "Chưa có hoạt động quest nào."
+            
             field_value = (
-                f"🔹 **Trạng Thái**: `{status_text}`\n"
+                f"💠 **Trạng Thái**: {status_text}\n"
                 f"📊 **Tổng quest**: `{total}`\n"
-                f"✅ **Hoàn thành**: `{completed}`\n"
-                f"📥 **Đã nhận**: `{enrolled}`\n"
-                f"❌ **Thất bại**: `{failed}`"
+                f"🌱 **Đã nhận**: `{enrolled}`\n"
+                f"❌ **Thất bại**: `{failed}`\n"
+                f"📜 **Quest gần đây**:\n{recent_str}"
             )
             embed.add_field(name=f"👤 {uname}", value=field_value, inline=False)
         
-        embed.set_footer(text="⚡ Oni • Quest Auto-Completer")
+        embed.set_footer(text="⚡ ONI QUEST SYSTEM • High Performance Auto-Completer")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="Stop Quest", style=discord.ButtonStyle.danger, emoji="⏹")
+    @discord.ui.button(label="Stop Quest", style=discord.ButtonStyle.danger, emoji="❌")
     async def stop_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         user_tokens = [v for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id]
@@ -123,30 +147,31 @@ class ControlPanelView(discord.ui.View):
                 stopped.append(info["username"])
                 
         if stopped:
-            await interaction.followup.send(f"⏹ Đã dừng: **{', '.join(stopped)}**", ephemeral=True)
+            await interaction.followup.send(f"❌ Đã dừng: **{', '.join(stopped)}**", ephemeral=True)
         else:
             await interaction.followup.send("⚠️ Không có quest nào đang chạy!", ephemeral=True)
 
 # ── Discord Commands ─────────────────────────────────────────────────────────
 
-@tree.command(name="autoquest", description="🔑 Quest Auto-Completer Control Panel")
+@tree.command(name="autoquest", description="⛩️ Oni Auto Quest Control Panel")
 async def autoquest(interaction: discord.Interaction):
     """Hiển thị embed + GIF + buttons"""
     embed = discord.Embed(
-        title="🔑 QUEST AUTO-COMPLETER",
-        description="Chào mừng đến với Quest Auto-Completer!\nNhấn nút bên dưới để quản lý quest của bạn.",
+        title="⛩️𝐎𝐍𝐈 • 𝐀𝐔𝐓𝐎 𝐐𝐔𝐄𝐒𝐓",
+        description="```🌙 Welcome to Oni Auto Quest ✨\n\nQuản lý tất cả quest của bạn một cách tự động```",
         color=0x9B59B6
     )
     
-    # Thêm ảnh GIF
+    # Thêm features
+    embed.add_field(name="⚔️ Auto Quest", value="Nhập token Discord - Tự động khởi chạy làm quest", inline=False)
+    embed.add_field(name="🔮 Status", value="Xem chi tiết quest làm được, quest đang làm, trạng thái từng tài khoản", inline=False)
+    embed.add_field(name="❌ Stop Quest", value="Dừng phiên làm quest hiện tại", inline=False)
+    embed.add_field(name="📝 Mô tả", value="Token chỉ dùng để hoàn thành quest, không lưu trữ.", inline=False)
+    
+    # Thêm ảnh GIF vào cuối
     embed.set_image(url="https://media.giphy.com/media/WJmwuUXuLvaSJo9owu/giphy.gif")
     
-    # Thêm features
-    embed.add_field(name="🔑 Auto Quest", value="Bắt đầu hoàn thành quest tự động", inline=False)
-    embed.add_field(name="💎 Thống kê Quest", value="Xem Quest đã làm, chưa làm, Orbs đã nhận và chưa nhận", inline=False)
-    embed.add_field(name="⏹ Stop Quest", value="Dừng phiên hiện tại", inline=False)
-    embed.add_field(name="📝 Mô tả", value="Token chỉ dùng để hoàn thành quest, không lưu trữ.", inline=False)
-    embed.set_footer(text="By: Oni • Quest Auto-Completer")
+    embed.set_footer(text="⚡ ONI QUEST SYSTEM • High Performance Auto-Completer")
     
     await interaction.response.send_message(embed=embed, view=ControlPanelView(), ephemeral=False)
 
@@ -167,3 +192,4 @@ def run_bot():
 
 if __name__ == "__main__":
     run_bot()
+
