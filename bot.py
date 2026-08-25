@@ -162,8 +162,11 @@ async def autoquest(interaction: discord.Interaction):
         color=0x9B59B6
     )
     
+    # Thêm thumbnail GIF ở trên phải
+    embed.set_thumbnail(url="https://media.giphy.com/media/pwGIVFqY2SwWDuuNW2/giphy.gif")
+    
     # Thêm ảnh GIF sau welcome
-    embed.set_image(url="https://media.giphy.com/media/WJmwuUXuLvaSJo9owu/giphy.gif")
+    embed.set_image(url="https://media.giphy.com/media/pwGIVFqY2SwWDuuNW2/giphy.gif")
     
     # Thêm features
     embed.add_field(name="⚔️ Auto Quest", value="Nhập token Discord - Tự động khởi chạy làm quest", inline=False)
