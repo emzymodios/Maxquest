@@ -69,6 +69,74 @@ class TokenInputModal(discord.ui.Modal, title="Nhập Token Discord"):
         except Exception as e:
             await interaction.response.send_message(f"❌ Lỗi: {e}", ephemeral=True)
 
+class AccountSelectView(discord.ui.View):
+    def __init__(self, user_tokens_map: dict, interaction: discord.Interaction):
+        super().__init__()
+        self.user_tokens_map = user_tokens_map
+        self.interaction = interaction
+        
+        # Tạo select menu với tất cả nick
+        select = discord.ui.Select(
+            placeholder="Chọn tài khoản để xem stats",
+            options=[
+                discord.SelectOption(label=info["username"], value=token)
+                for token, info in user_tokens_map.items()
+            ]
+        )
+        select.callback = self.on_select
+        self.add_item(select)
+    
+    async def on_select(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        selected_token = interaction.data["values"][0]
+        await self.show_account_stats(interaction, selected_token)
+    
+    async def show_account_stats(self, interaction: discord.Interaction, token: str):
+        """Hiển thị stats của 1 tài khoản"""
+        info = self.user_tokens_map[token]
+        u_id = info["user_id"]
+        uname = info["username"]
+        
+        running_accounts = get_running_accounts()
+        
+        embed = discord.Embed(title="🔮 ONI QUEST - STATUS", color=0x9B59B6)
+        
+        is_running = get_worker(u_id) is not None
+        status_text = "🟢 Đang chạy" if is_running else "🔴 Đang dừng"
+        
+        token_logs = database.get_quest_logs_by_user(u_id, 10)
+        total = len(token_logs)
+        enrolled = sum(1 for l in token_logs if l.get("action") == "enrolled")
+        failed = sum(1 for l in token_logs if l.get("status") == "failed")
+        completed = sum(1 for l in token_logs if l.get("status") == "success")
+        
+        lines = []
+        active_acc = next((acc for acc in running_accounts if str(acc.get("user_id")) == str(u_id)), None)
+        current_msg = active_acc.get("message") if active_acc else None
+        if current_msg and is_running:
+            lines.append(f"⚔️🥇 **Đang làm**: `{current_msg}`")
+            
+        if token_logs:
+            for log_entry in token_logs[:5]:
+                action_icon = action_emoji(log_entry.get("action", ""))
+                status_icon = "✅" if log_entry.get("status") == "success" else "❌"
+                qname = log_entry.get("quest_name") or f"Quest#{log_entry.get('quest_id', '?')}"
+                lines.append(f"{action_icon} {status_icon} **{qname}**")
+        
+        recent_str = "\n".join(lines) if lines else "Chưa có hoạt động quest nào."
+        
+        field_value = (
+            f"💠 **Trạng Thái**: {status_text}\n"
+            f"📊 **Tổng quest**: `{total}`\n"
+            f"🌱 **Đã nhận**: `{enrolled}`\n"
+            f"❌ **Thất bại**: `{failed}`\n"
+            f"📜 **Quest gần đây**:\n{recent_str}"
+        )
+        embed.add_field(name=f"👤 {uname}", value=field_value, inline=False)
+        
+        embed.set_footer(text="⚡ ONI QUEST SYSTEM • High Performance Auto-Completer")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
 class ControlPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -77,7 +145,7 @@ class ControlPanelView(discord.ui.View):
     async def auto_quest_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TokenInputModal())
 
-    @discord.ui.button(label="Status", style=discord.ButtonStyle.secondary, emoji="🔮")
+    @discord.ui.button(label="Status", style=discord.ButtonStyle.success, emoji="🔮")
     async def stats_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         user_tokens_map = {k: v for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id}
@@ -85,51 +153,16 @@ class ControlPanelView(discord.ui.View):
         if not user_tokens_map:
             await interaction.followup.send("❌ Bạn chưa nhập token nào!", ephemeral=True)
             return
-
-        stats = database.get_stats()
-        running_accounts = get_running_accounts()
         
-        embed = discord.Embed(title="🔮 ONI QUEST - STATUS", color=0x9B59B6)
-        
-        for token, info in user_tokens_map.items():
-            u_id = info["user_id"]
-            uname = info["username"]
-            
-            is_running = get_worker(u_id) is not None
-            status_text = "🟢 Đang chạy" if is_running else "🔴 Đang dừng"
-            
-            token_logs = database.get_quest_logs_by_user(u_id, 10)
-            total = len(token_logs)
-            enrolled = sum(1 for l in token_logs if l.get("action") == "enrolled")
-            failed = sum(1 for l in token_logs if l.get("status") == "failed")
-            completed = sum(1 for l in token_logs if l.get("status") == "success")
-            
-            lines = []
-            active_acc = next((acc for acc in running_accounts if str(acc.get("user_id")) == str(u_id)), None)
-            current_msg = active_acc.get("message") if active_acc else None
-            if current_msg and is_running:
-                lines.append(f"⚔️🥇 **Đang làm**: `{current_msg}`")
-                
-            if token_logs:
-                for log_entry in token_logs[:5]:
-                    action_icon = action_emoji(log_entry.get("action", ""))
-                    status_icon = "✅" if log_entry.get("status") == "success" else "❌"
-                    qname = log_entry.get("quest_name") or f"Quest#{log_entry.get('quest_id', '?')}"
-                    lines.append(f"{action_icon} {status_icon} **{qname}**")
-            
-            recent_str = "\n".join(lines) if lines else "Chưa có hoạt động quest nào."
-            
-            field_value = (
-                f"💠 **Trạng Thái**: {status_text}\n"
-                f"📊 **Tổng quest**: `{total}`\n"
-                f"🌱 **Đã nhận**: `{enrolled}`\n"
-                f"❌ **Thất bại**: `{failed}`\n"
-                f"📜 **Quest gần đây**:\n{recent_str}"
-            )
-            embed.add_field(name=f"👤 {uname}", value=field_value, inline=False)
-        
-        embed.set_footer(text="⚡ ONI QUEST SYSTEM • High Performance Auto-Completer")
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        # Nếu chỉ có 1 token, hiển thị stats ngay
+        if len(user_tokens_map) == 1:
+            token = list(user_tokens_map.keys())[0]
+            select_view = AccountSelectView(user_tokens_map, interaction)
+            await select_view.show_account_stats(interaction, token)
+        else:
+            # Nếu > 1 token, hiển thị select menu
+            select_view = AccountSelectView(user_tokens_map, interaction)
+            await interaction.followup.send("Chọn tài khoản:", view=select_view, ephemeral=True)
 
     @discord.ui.button(label="Stop Quest", style=discord.ButtonStyle.danger, emoji="❌")
     async def stop_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
