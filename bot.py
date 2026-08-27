@@ -184,6 +184,33 @@ class ControlPanelView(discord.ui.View):
         else:
             await interaction.followup.send("⚠️ Không có quest nào đang chạy!", ephemeral=True)
 
+    @discord.ui.button(label="Restart", style=discord.ButtonStyle.primary, emoji="🔄")
+    async def restart_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        user_tokens_map = {k: v for k, v in token_to_user.items() if v["discord_user_id"] == interaction.user.id}
+        
+        if not user_tokens_map:
+            await interaction.followup.send("❌ Bạn chưa nhập token nào!", ephemeral=True)
+            return
+
+        restarted = []
+        for token, info in user_tokens_map.items():
+            u_id = info["user_id"]
+            uname = info["username"]
+            
+            # Dừng worker cũ nếu đang chạy
+            if get_worker(u_id):
+                stop_worker(u_id)
+            
+            # Khởi động lại worker
+            start_worker(token, u_id, uname, 60, True)
+            restarted.append(uname)
+        
+        if restarted:
+            await interaction.followup.send(f"🔄 Đã restart thành công: **{', '.join(restarted)}**", ephemeral=True)
+        else:
+            await interaction.followup.send("⚠️ Không có token nào để restart!", ephemeral=True)
+
 # ── Discord Commands ─────────────────────────────────────────────────────────
 
 @tree.command(name="autoquest", description="⛩️ Oni Auto Quest Control Panel")
@@ -205,6 +232,7 @@ async def autoquest(interaction: discord.Interaction):
     embed.add_field(name="⚔️ Auto Quest", value="Nhập token Discord - Tự động khởi chạy làm quest", inline=False)
     embed.add_field(name="🔮 Status", value="Xem chi tiết quest làm được, quest đang làm, trạng thái từng tài khoản", inline=False)
     embed.add_field(name="❌ Stop Quest", value="Dừng phiên làm quest hiện tại", inline=False)
+    embed.add_field(name="🔄 Restart", value="Khởi động lại tất cả account đã nhập token", inline=False)
     
     embed.set_footer(text="ᵐᵃᵈᵉ ᵇʸ ᴼɴɪ")
     
